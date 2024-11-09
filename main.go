@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	botToken      = "7498899285:AAFzUYCYoESplw3w-zlUGcojS2TcXwKOaAA"
-	botUsername   = "zsnet_official_bot"
-	privateChatID = -1002476692525
+	botToken      = ""
+	botUsername   = ""
+	privateChatID = 0
 	cacheFilePath = "file_cache.json"
 )
 
