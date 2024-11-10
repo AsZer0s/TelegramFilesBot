@@ -1,4 +1,4 @@
-name: Build Go Project
+name: Build Go
 
 on:
   push:
