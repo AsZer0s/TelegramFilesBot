@@ -30,7 +30,7 @@ var (
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	log.Println("启动机器人...")
+	log.Println("Start the robot...")
 
 	loadCache()
 
@@ -38,7 +38,7 @@ func main() {
 	if useProxy {
 		proxyURL, err := url.Parse("http://127.0.0.1:7890")
 		if err != nil {
-			log.Fatalf("代理URL解析失败: %v", err)
+			log.Fatalf("Proxy URL parsing failed: %v", err)
 		}
 		httpClient = &http.Client{
 			Transport: &http.Transport{
@@ -50,19 +50,19 @@ func main() {
 				}).DialContext,
 			},
 		}
-		log.Println("代理模式已启用")
+		log.Println("Proxy Enabled")
 	} else {
 		httpClient = http.DefaultClient
-		log.Println("代理模式已禁用")
+		log.Println("Proxy Disabled")
 	}
 
 	bot, err := tgbotapi.NewBotAPIWithClient(botToken, tgbotapi.APIEndpoint, httpClient)
 	if err != nil {
-		log.Fatalf("BotAPI初始化失败: %v", err)
+		log.Fatalf("BotAPI initialization failed: %v", err)
 	}
 
 	bot.Debug = false
-	log.Printf("成功登录机器人: %s", bot.Self.UserName)
+	log.Printf("Successfully logged into the robot: %s", bot.Self.UserName)
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
@@ -85,12 +85,12 @@ func main() {
 		case "/start", "帮助":
 			sendCustomKeyboard(bot, update.Message.Chat.ID)
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "欢迎使用ZSNET Bot!\n向我发送文件来上传\n使用 /list 查看文件列表\n使用 /delete 删除文件")
-			sendMessageWithLog(bot, msg, "欢迎信息发送成功")
+			sendMessageWithLog(bot, msg, "Welcome message sent successfully")
 
 		case "/list", "我的文件" :
 			if len(fileStore) == 0 {
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "没有找到任何文件哦")
-				sendMessageWithLog(bot, msg, "发送空文件列表信息")
+				sendMessageWithLog(bot, msg, "Send empty file list message")
 				continue
 			}
 
@@ -106,7 +106,7 @@ func main() {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, fileList)
 			msg.ParseMode = "MarkdownV2"
 			msg.DisableWebPagePreview = true
-			sendMessageWithLog(bot, msg, "文件列表发送成功")
+			sendMessageWithLog(bot, msg, "File list sent successfully")
 
 		case "/delete", "删除文件":
 			if update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.Document != nil {
@@ -116,7 +116,7 @@ func main() {
 				args := update.Message.CommandArguments()
 				if args == "" {
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "请输入要删除的文件名，或者回复包含文件的消息并使用 /delete")
-					sendMessageWithLog(bot, msg, "提醒用户输入文件名或回复文件消息")
+					sendMessageWithLog(bot, msg, "Prompt the user to enter a file name or reply to a file message")
 					continue
 				}
 				deleteFile(bot, update.Message.Chat.ID, args)
@@ -132,11 +132,11 @@ func main() {
 				_, err := bot.Send(forward)
 				if err != nil {
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "文件保存失败")
-					sendMessageWithLog(bot, msg, fmt.Sprintf("文件保存失败: %s", fileName))
+					sendMessageWithLog(bot, msg, fmt.Sprintf("File save failed: %s", fileName))
 					continue
 				}
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "文件保存成功")
-				sendMessageWithLog(bot, msg, fmt.Sprintf("文件已保存并转发到群组: %s", fileName))
+				sendMessageWithLog(bot, msg, fmt.Sprintf("The file has been saved and forwarded to the group: %s", fileName))
 			} else if update.Message.Photo != nil {
 				photo := update.Message.Photo[len(update.Message.Photo)-1]
 				fileID := photo.FileID
@@ -144,17 +144,17 @@ func main() {
 				fileStore[fileName] = fileID
 				saveCache()
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "图片已保存")
-				sendMessageWithLog(bot, msg, fmt.Sprintf("图片已保存: %s", fileName))
+				sendMessageWithLog(bot, msg, fmt.Sprintf("Image saved: %s", fileName))
 			} else if update.Message.Video != nil {
 				fileID := update.Message.Video.FileID
 				fileName := fmt.Sprintf("video_%d.mp4", time.Now().Unix())
 				fileStore[fileName] = fileID
 				saveCache()
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "视频已保存")
-				sendMessageWithLog(bot, msg, fmt.Sprintf("视频已保存: %s", fileName))
+				sendMessageWithLog(bot, msg, fmt.Sprintf("Video saved: %s", fileName))
 			} else {
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "命令错误")
-				sendMessageWithLog(bot, msg, "用户发送了无效命令")
+				sendMessageWithLog(bot, msg, "User sent an invalid command")
 			}
 		}
 	}
@@ -175,7 +175,7 @@ func sendCustomKeyboard(bot *tgbotapi.BotAPI, chatID int64) {
 	msg := tgbotapi.NewMessage(chatID, "请选择一个操作:")
 	msg.ReplyMarkup = keyboard
 	if _, err := bot.Send(msg); err != nil {
-		log.Printf("发送自定义键盘失败: %v", err)
+		log.Printf("Failed to send custom keyboard: %v", err)
 	}
 }
 
@@ -184,10 +184,10 @@ func deleteFile(bot *tgbotapi.BotAPI, chatID int64, fileName string) {
 		delete(fileStore, fileName)
 		saveCache()
 		msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("文件已删除: %s", fileName))
-		sendMessageWithLog(bot, msg, fmt.Sprintf("文件删除成功: %s", fileName))
+		sendMessageWithLog(bot, msg, fmt.Sprintf("File deleted successfully: %s", fileName))
 	} else {
 		msg := tgbotapi.NewMessage(chatID, "未找到指定文件")
-		sendMessageWithLog(bot, msg, fmt.Sprintf("文件未找到: %s", fileName))
+		sendMessageWithLog(bot, msg, fmt.Sprintf("file not found: %s", fileName))
 	}
 }
 
@@ -206,28 +206,28 @@ func downloadFile(bot *tgbotapi.BotAPI, chatID int64, fileName string) {
 
 	if !exists {
 		msg := tgbotapi.NewMessage(chatID, "未找到文件")
-		sendMessageWithLog(bot, msg, fmt.Sprintf("下载请求的文件未找到: %s", fileName))
+		sendMessageWithLog(bot, msg, fmt.Sprintf("The requested file was not found.: %s", fileName))
 		return
 	}
 
 	if strings.HasPrefix(fileName, "photo_") {
 		photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileID(fileID))
 		photo.Caption = displayName
-		sendPhotoWithLog(bot, photo, fmt.Sprintf("图片已发送给用户: %s", displayName))
+		sendPhotoWithLog(bot, photo, fmt.Sprintf("Image sent to user: %s", displayName))
 	} else if strings.HasPrefix(fileName, "video_") {
 		video := tgbotapi.NewVideo(chatID, tgbotapi.FileID(fileID))
 		video.Caption = displayName
-		sendVideoWithLog(bot, video, fmt.Sprintf("视频已发送给用户: %s", displayName))
+		sendVideoWithLog(bot, video, fmt.Sprintf("Video sent to user: %s", displayName))
 	} else {
 		document := tgbotapi.NewDocument(chatID, tgbotapi.FileID(fileID))
 		document.Caption = displayName
-		sendDocumentWithLog(bot, document, fmt.Sprintf("文件已发送给用户: %s", displayName))
+		sendDocumentWithLog(bot, document, fmt.Sprintf("File sent to user: %s", displayName))
 	}
 }
 
 func sendMessageWithLog(bot *tgbotapi.BotAPI, msg tgbotapi.MessageConfig, logMessage string) {
 	if _, err := bot.Send(msg); err != nil {
-		log.Printf("发送消息失败: %v", err)
+		log.Printf("Failed to send message: %v", err)
 	} else {
 		log.Println(logMessage)
 	}
@@ -235,7 +235,7 @@ func sendMessageWithLog(bot *tgbotapi.BotAPI, msg tgbotapi.MessageConfig, logMes
 
 func sendPhotoWithLog(bot *tgbotapi.BotAPI, photo tgbotapi.PhotoConfig, logMessage string) {
 	if _, err := bot.Send(photo); err != nil {
-		log.Printf("发送图片失败: %v", err)
+		log.Printf("Failed to send picture: %v", err)
 	} else {
 		log.Println(logMessage)
 	}
@@ -243,7 +243,7 @@ func sendPhotoWithLog(bot *tgbotapi.BotAPI, photo tgbotapi.PhotoConfig, logMessa
 
 func sendVideoWithLog(bot *tgbotapi.BotAPI, video tgbotapi.VideoConfig, logMessage string) {
 	if _, err := bot.Send(video); err != nil {
-		log.Printf("发送视频失败: %v", err)
+		log.Printf("Failed to send video: %v", err)
 	} else {
 		log.Println(logMessage)
 	}
@@ -251,7 +251,7 @@ func sendVideoWithLog(bot *tgbotapi.BotAPI, video tgbotapi.VideoConfig, logMessa
 
 func sendDocumentWithLog(bot *tgbotapi.BotAPI, document tgbotapi.DocumentConfig, logMessage string) {
 	if _, err := bot.Send(document); err != nil {
-		log.Printf("发送文件失败: %v", err)
+		log.Printf("Failed to send file: %v", err)
 	} else {
 		log.Println(logMessage)
 	}
@@ -264,12 +264,12 @@ func loadCache() {
 
 	data, err := ioutil.ReadFile(cacheFilePath)
 	if err != nil {
-		log.Printf("读取缓存文件失败: %v", err)
+		log.Printf("Failed to read cache file: %v", err)
 		return
 	}
 
 	if err := json.Unmarshal(data, &fileStore); err != nil {
-		log.Printf("解析缓存文件失败: %v", err)
+		log.Printf("Failed to parse cache file: %v", err)
 		return
 	}
 }
@@ -277,12 +277,12 @@ func loadCache() {
 func saveCache() {
 	data, err := json.Marshal(fileStore)
 	if err != nil {
-		log.Printf("保存缓存文件失败: %v", err)
+		log.Printf("Failed to save cache file: %v", err)
 		return
 	}
 
 	if err := ioutil.WriteFile(cacheFilePath, data, 0644); err != nil {
-		log.Printf("写入缓存文件失败: %v", err)
+		log.Printf("Failed to write cache file: %v", err)
 	}
 }
 
