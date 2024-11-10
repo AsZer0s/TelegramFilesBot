@@ -27,7 +27,7 @@ jobs:
           go-version: '1.18'
 
       - name: Cache Go modules
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cache/go-build
@@ -41,10 +41,10 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -o output/${{ matrix.goos }}_${{ matrix.goarch }}/myapp
+          go build -o output/${{ matrix.goos }}_${{ matrix.goarch }}/TeleFilesBot
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3   # Updated to v3
+        uses: actions/upload-artifact@v3
         with:
-          name: myapp-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: output/${{ matrix.goos }}_${{ matrix.goarch }}/myapp
+          name: TeleFilesBot-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: output/${{ matrix.goos }}_${{ matrix.goarch }}/TeleFilesBot
