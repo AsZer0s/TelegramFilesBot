@@ -80,12 +80,14 @@ func main() {
 			continue
 		}
 
-		switch update.Message.Command() {
-		case "start":
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "欢迎使用ZSNET Bot\n向我发送文件来上传\n使用 /list 查看文件列表\n使用 /delete 删除文件")
+		command := strings.TrimSpace(update.Message.Text)
+		switch command {
+		case "/start", "帮助":
+			sendCustomKeyboard(bot, update.Message.Chat.ID)
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "欢迎使用ZSNET Bot!\n向我发送文件来上传\n使用 /list 查看文件列表\n使用 /delete 删除文件")
 			sendMessageWithLog(bot, msg, "欢迎信息发送成功")
 
-		case "list":
+		case "/list", "我的文件" :
 			if len(fileStore) == 0 {
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "没有找到任何文件哦")
 				sendMessageWithLog(bot, msg, "发送空文件列表信息")
@@ -106,7 +108,7 @@ func main() {
 			msg.DisableWebPagePreview = true
 			sendMessageWithLog(bot, msg, "文件列表发送成功")
 
-		case "delete":
+		case "/delete", "删除文件":
 			if update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.Document != nil {
 				fileName := update.Message.ReplyToMessage.Document.FileName
 				deleteFile(bot, update.Message.Chat.ID, fileName)
@@ -158,6 +160,25 @@ func main() {
 	}
 }
 
+func sendCustomKeyboard(bot *tgbotapi.BotAPI, chatID int64) {
+	keyboard := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("帮助"),
+			tgbotapi.NewKeyboardButton("我的文件"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("删除文件"),
+			tgbotapi.NewKeyboardButton("下载文件"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, "请选择一个操作:")
+	msg.ReplyMarkup = keyboard
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("发送自定义键盘失败: %v", err)
+	}
+}
+
 func deleteFile(bot *tgbotapi.BotAPI, chatID int64, fileName string) {
 	if _, exists := fileStore[fileName]; exists {
 		delete(fileStore, fileName)
@@ -198,82 +219,77 @@ func downloadFile(bot *tgbotapi.BotAPI, chatID int64, fileName string) {
 		video.Caption = displayName
 		sendVideoWithLog(bot, video, fmt.Sprintf("视频已发送给用户: %s", displayName))
 	} else {
-		doc := tgbotapi.NewDocument(chatID, tgbotapi.FileID(fileID))
-		doc.Caption = displayName
-		sendDocumentWithLog(bot, doc, fmt.Sprintf("文件已发送给用户: %s", displayName))
+		document := tgbotapi.NewDocument(chatID, tgbotapi.FileID(fileID))
+		document.Caption = displayName
+		sendDocumentWithLog(bot, document, fmt.Sprintf("文件已发送给用户: %s", displayName))
 	}
 }
 
 func sendMessageWithLog(bot *tgbotapi.BotAPI, msg tgbotapi.MessageConfig, logMessage string) {
-	_, err := bot.Send(msg)
-	if err != nil {
-		log.Printf("消息发送失败: %v", err)
-	} else {
-		log.Println(logMessage)
-	}
-}
-
-func sendDocumentWithLog(bot *tgbotapi.BotAPI, doc tgbotapi.DocumentConfig, logMessage string) {
-	_, err := bot.Send(doc)
-	if err != nil {
-		log.Printf("文件发送失败: %v", err)
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("发送消息失败: %v", err)
 	} else {
 		log.Println(logMessage)
 	}
 }
 
 func sendPhotoWithLog(bot *tgbotapi.BotAPI, photo tgbotapi.PhotoConfig, logMessage string) {
-	_, err := bot.Send(photo)
-	if err != nil {
-		log.Printf("图片发送失败: %v", err)
+	if _, err := bot.Send(photo); err != nil {
+		log.Printf("发送图片失败: %v", err)
 	} else {
 		log.Println(logMessage)
 	}
 }
 
 func sendVideoWithLog(bot *tgbotapi.BotAPI, video tgbotapi.VideoConfig, logMessage string) {
-	_, err := bot.Send(video)
-	if err != nil {
-		log.Printf("视频发送失败: %v", err)
+	if _, err := bot.Send(video); err != nil {
+		log.Printf("发送视频失败: %v", err)
 	} else {
 		log.Println(logMessage)
 	}
 }
 
-func escapeMarkdownV2(text string) string {
-	specialChars := "_*[]()~`>#+-=|{}.!"
-	for _, char := range specialChars {
-		text = strings.ReplaceAll(text, string(char), "\\"+string(char))
+func sendDocumentWithLog(bot *tgbotapi.BotAPI, document tgbotapi.DocumentConfig, logMessage string) {
+	if _, err := bot.Send(document); err != nil {
+		log.Printf("发送文件失败: %v", err)
+	} else {
+		log.Println(logMessage)
 	}
-	return text
 }
 
 func loadCache() {
-	data, err := ioutil.ReadFile(cacheFilePath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Printf("缓存加载失败: %v", err)
-		}
+	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
 		return
 	}
-	err = json.Unmarshal(data, &fileStore)
+
+	data, err := ioutil.ReadFile(cacheFilePath)
 	if err != nil {
-		log.Printf("解析缓存失败: %v", err)
-	} else {
-		log.Println("文件缓存已成功加载")
+		log.Printf("读取缓存文件失败: %v", err)
+		return
+	}
+
+	if err := json.Unmarshal(data, &fileStore); err != nil {
+		log.Printf("解析缓存文件失败: %v", err)
+		return
 	}
 }
 
 func saveCache() {
 	data, err := json.Marshal(fileStore)
 	if err != nil {
-		log.Printf("缓存保存失败: %v", err)
+		log.Printf("保存缓存文件失败: %v", err)
 		return
 	}
-	err = ioutil.WriteFile(cacheFilePath, data, 0644)
-	if err != nil {
-		log.Printf("缓存写入失败: %v", err)
-	} else {
-		log.Println("文件缓存已成功保存")
+
+	if err := ioutil.WriteFile(cacheFilePath, data, 0644); err != nil {
+		log.Printf("写入缓存文件失败: %v", err)
 	}
+}
+
+func escapeMarkdownV2(text string) string {
+	chars := []string{"_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"}
+	for _, ch := range chars {
+		text = strings.ReplaceAll(text, ch, "\\"+ch)
+	}
+	return text
 }
