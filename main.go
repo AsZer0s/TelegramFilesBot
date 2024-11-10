@@ -165,6 +165,31 @@ func main() {
 }
 
 func loadConfig(configFile string) error {
+	if _, err := ioutil.ReadFile(configFile); err != nil {
+		log.Println("Config file not found, generating a new one...")
+
+		defaultConfig := Config{
+			BotToken:      "your-bot-token-here",
+			BotUsername:   "your-bot-username-here",
+			PrivateChatID: 123456789,
+			CacheFilePath: "cache.json",
+		}
+
+		data, err := json.MarshalIndent(defaultConfig, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal default config: %v", err)
+		}
+
+		if err := ioutil.WriteFile(configFile, data, 0644); err != nil {
+			return fmt.Errorf("failed to write default config file: %v", err)
+		}
+
+		log.Println("Default config file created successfully.")
+
+		config = defaultConfig
+		return nil
+	}
+
 	data, err := ioutil.ReadFile(configFile)
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %v", err)
