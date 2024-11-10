@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,14 +15,15 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-const (
-	botToken      = "You Token"
-	botUsername   = "You Bot Username"
-	privateChatID = 0
-	cacheFilePath = "file_cache.json"
-)
+type Config struct {
+	BotToken      string `json:"botToken"`
+	BotUsername   string `json:"botUsername"`
+	PrivateChatID int64  `json:"privateChatID"`
+	CacheFilePath string `json:"cacheFilePath"`
+}
 
 var (
+	config    Config
 	fileStore = make(map[string]string)
 	useProxy  = true
 )
@@ -31,6 +31,10 @@ var (
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	log.Println("Start the robot...")
+
+	if err := loadConfig("config.json"); err != nil {
+		log.Fatalf("Error loading configuration: %v", err)
+	}
 
 	loadCache()
 
@@ -56,7 +60,7 @@ func main() {
 		log.Println("Proxy Disabled")
 	}
 
-	bot, err := tgbotapi.NewBotAPIWithClient(botToken, tgbotapi.APIEndpoint, httpClient)
+	bot, err := tgbotapi.NewBotAPIWithClient(config.BotToken, tgbotapi.APIEndpoint, httpClient)
 	if err != nil {
 		log.Fatalf("BotAPI initialization failed: %v", err)
 	}
@@ -87,7 +91,7 @@ func main() {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "欢迎使用ZSNET Bot!\n向我发送文件来上传\n使用 /list 查看文件列表\n使用 /delete 删除文件")
 			sendMessageWithLog(bot, msg, "Welcome message sent successfully")
 
-		case "/list", "我的文件" :
+		case "/list", "我的文件":
 			if len(fileStore) == 0 {
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "没有找到任何文件哦")
 				sendMessageWithLog(bot, msg, "Send empty file list message")
@@ -99,7 +103,7 @@ func main() {
 			for fileName := range fileStore {
 				nameWithoutExt := strings.TrimSuffix(fileName, filepath.Ext(fileName))
 				escapedFileName := escapeMarkdownV2(nameWithoutExt)
-				downloadLink := fmt.Sprintf("https://t.me/%s?start=download_%s", botUsername, strings.ReplaceAll(escapedFileName, " ", "_"))
+				downloadLink := fmt.Sprintf("https://t.me/%s?start=download_%s", config.BotUsername, strings.ReplaceAll(escapedFileName, " ", "_"))
 				fileList += fmt.Sprintf("%d [%s](%s)\n", i, escapedFileName, escapeMarkdownV2(downloadLink))
 				i++
 			}
@@ -128,7 +132,7 @@ func main() {
 				fileName := update.Message.Document.FileName
 				fileStore[fileName] = fileID
 				saveCache()
-				forward := tgbotapi.NewForward(privateChatID, update.Message.Chat.ID, update.Message.MessageID)
+				forward := tgbotapi.NewForward(config.PrivateChatID, update.Message.Chat.ID, update.Message.MessageID)
 				_, err := bot.Send(forward)
 				if err != nil {
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "文件保存失败")
@@ -158,6 +162,19 @@ func main() {
 			}
 		}
 	}
+}
+
+func loadConfig(configFile string) error {
+	data, err := ioutil.ReadFile(configFile)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %v", err)
+	}
+
+	if err := json.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("failed to parse config file: %v", err)
+	}
+
+	return nil
 }
 
 func sendCustomKeyboard(bot *tgbotapi.BotAPI, chatID int64) {
@@ -198,98 +215,62 @@ func downloadFile(bot *tgbotapi.BotAPI, chatID int64, fileName string) {
 	for key, value := range fileStore {
 		if strings.TrimSuffix(key, filepath.Ext(key)) == fileName {
 			fileID = value
+			displayName = key
 			exists = true
-			displayName = strings.TrimSuffix(key, filepath.Ext(key))
 			break
 		}
 	}
-
-	if !exists {
-		msg := tgbotapi.NewMessage(chatID, "未找到文件")
-		sendMessageWithLog(bot, msg, fmt.Sprintf("The requested file was not found.: %s", fileName))
-		return
-	}
-
-	if strings.HasPrefix(fileName, "photo_") {
-		photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileID(fileID))
-		photo.Caption = displayName
-		sendPhotoWithLog(bot, photo, fmt.Sprintf("Image sent to user: %s", displayName))
-	} else if strings.HasPrefix(fileName, "video_") {
-		video := tgbotapi.NewVideo(chatID, tgbotapi.FileID(fileID))
-		video.Caption = displayName
-		sendVideoWithLog(bot, video, fmt.Sprintf("Video sent to user: %s", displayName))
+	if exists {
+		file, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
+		if err != nil {
+			log.Printf("Failed to get file: %v", err)
+			return
+		}
+		filePath := file.FilePath
+		msg := tgbotapi.NewDocument(chatID, tgbotapi.FileURL("https://api.telegram.org/file/bot" + config.BotToken + "/" + filePath))
+		msg.Caption = displayName
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("Failed to send file: %v", err)
+		}
 	} else {
-		document := tgbotapi.NewDocument(chatID, tgbotapi.FileID(fileID))
-		document.Caption = displayName
-		sendDocumentWithLog(bot, document, fmt.Sprintf("File sent to user: %s", displayName))
-	}
-}
-
-func sendMessageWithLog(bot *tgbotapi.BotAPI, msg tgbotapi.MessageConfig, logMessage string) {
-	if _, err := bot.Send(msg); err != nil {
-		log.Printf("Failed to send message: %v", err)
-	} else {
-		log.Println(logMessage)
-	}
-}
-
-func sendPhotoWithLog(bot *tgbotapi.BotAPI, photo tgbotapi.PhotoConfig, logMessage string) {
-	if _, err := bot.Send(photo); err != nil {
-		log.Printf("Failed to send picture: %v", err)
-	} else {
-		log.Println(logMessage)
-	}
-}
-
-func sendVideoWithLog(bot *tgbotapi.BotAPI, video tgbotapi.VideoConfig, logMessage string) {
-	if _, err := bot.Send(video); err != nil {
-		log.Printf("Failed to send video: %v", err)
-	} else {
-		log.Println(logMessage)
-	}
-}
-
-func sendDocumentWithLog(bot *tgbotapi.BotAPI, document tgbotapi.DocumentConfig, logMessage string) {
-	if _, err := bot.Send(document); err != nil {
-		log.Printf("Failed to send file: %v", err)
-	} else {
-		log.Println(logMessage)
-	}
-}
-
-func loadCache() {
-	if _, err := os.Stat(cacheFilePath); os.IsNotExist(err) {
-		return
-	}
-
-	data, err := ioutil.ReadFile(cacheFilePath)
-	if err != nil {
-		log.Printf("Failed to read cache file: %v", err)
-		return
-	}
-
-	if err := json.Unmarshal(data, &fileStore); err != nil {
-		log.Printf("Failed to parse cache file: %v", err)
-		return
+		msg := tgbotapi.NewMessage(chatID, "文件不存在")
+		sendMessageWithLog(bot, msg, "File not found")
 	}
 }
 
 func saveCache() {
 	data, err := json.Marshal(fileStore)
 	if err != nil {
-		log.Printf("Failed to save cache file: %v", err)
+		log.Printf("Failed to save cache: %v", err)
 		return
 	}
 
-	if err := ioutil.WriteFile(cacheFilePath, data, 0644); err != nil {
+	if err := ioutil.WriteFile(config.CacheFilePath, data, 0644); err != nil {
 		log.Printf("Failed to write cache file: %v", err)
 	}
 }
 
-func escapeMarkdownV2(text string) string {
-	chars := []string{"_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"}
-	for _, ch := range chars {
-		text = strings.ReplaceAll(text, ch, "\\"+ch)
+func loadCache() {
+	data, err := ioutil.ReadFile(config.CacheFilePath)
+	if err != nil {
+		log.Println("No cache file found, continuing with an empty store.")
+		return
 	}
-	return text
+
+	if err := json.Unmarshal(data, &fileStore); err != nil {
+		log.Printf("Failed to load cache: %v", err)
+	}
+}
+
+func sendMessageWithLog(bot *tgbotapi.BotAPI, msg tgbotapi.MessageConfig, logMessage string) {
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Printf("Error sending message: %v", err)
+	}
+	log.Println(logMessage)
+}
+
+func escapeMarkdownV2(input string) string {
+	// Escape characters for MarkdownV2
+	return strings.ReplaceAll(input, "_", "\\_")
 }
