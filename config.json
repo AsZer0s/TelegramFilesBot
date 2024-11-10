@@ -1,6 +1,6 @@
 {
-    "botToken": "Your_Token",
-    "botUsername": "Your_Bot_Username",
+    "botToken": "You_Bot_Token",
+    "botUsername": "You_Bot_Username",
     "privateChatID": 0,
     "cacheFilePath": "file_cache.json"
 }
